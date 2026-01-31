@@ -29,4 +29,9 @@ public class Config : SharedConfig
     /// These domains still function as private email domains but are not shown in domain selection dropdowns.
     /// </summary>
     public List<string> HiddenPrivateEmailDomains { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the list of allowed origins for CORS.
+    /// </summary>
+    public List<string> AllowedOrigins { get; set; } = [];
 }
