@@ -23,6 +23,7 @@ using AliasVault.Shared.Server.Services;
 using AliasVault.Shared.Server.Utilities;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -54,6 +55,12 @@ var hiddenPrivateEmailDomains = Environment.GetEnvironmentVariable("HIDDEN_PRIVA
     .Where(d => !string.IsNullOrWhiteSpace(d));
 config.HiddenPrivateEmailDomains = hiddenPrivateEmailDomains?.ToList() ?? new List<string>();
 
+var allowedOrigins = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS")?
+    .Split(",", StringSplitOptions.RemoveEmptyEntries)
+    .Select(o => o.Trim())
+    .Where(o => !string.IsNullOrWhiteSpace(o));
+config.AllowedOrigins = allowedOrigins?.ToList() ?? new List<string>();
+
 var ipLoggingEnabled = Environment.GetEnvironmentVariable("IP_LOGGING_ENABLED") ?? "false";
 config.IpLoggingEnabled = bool.Parse(ipLoggingEnabled);
 
@@ -70,6 +77,15 @@ builder.Services.AddScoped<AuthLoggingService>();
 builder.Services.AddScoped<ServerSettingsService>();
 builder.Services.AddHttpContextAccessor();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
 builder.Services.AddLogging(logging =>
 {
     logging.AddConsole();
@@ -80,12 +96,12 @@ builder.Services.AddLogging(logging =>
 
 builder.Services.AddIdentity<AliasVaultUser, AliasVaultRole>(options =>
     {
-        options.Password.RequireDigit = false;
-        options.Password.RequireLowercase = false;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequiredLength = 8;
-        options.Password.RequiredUniqueChars = 0;
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequiredLength = 12;
+        options.Password.RequiredUniqueChars = 1;
         options.SignIn.RequireConfirmedAccount = false;
         options.Lockout.MaxFailedAccessAttempts = 10;
         options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(30);
@@ -127,9 +143,21 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(
         "CorsPolicy",
-        policy => policy.AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader());
+        policy =>
+        {
+            if (config.AllowedOrigins.Count > 0)
+            {
+                policy.WithOrigins(config.AllowedOrigins.ToArray())
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+            }
+            else
+            {
+                policy.AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+            }
+        });
 });
 
 builder.Services.AddControllers()
@@ -192,6 +220,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseForwardedHeaders();
 
 app.UseCors("CorsPolicy");
 

@@ -28,18 +28,9 @@ public static class IpAddressUtility
             return ipAddress;
         }
 
-        if (string.IsNullOrEmpty(ipAddress))
-        {
-            // Check if X-Forwarded-For header exists, if so, extract first IP address from comma separated list.
-            if (httpContext.Request.Headers.TryGetValue("X-Forwarded-For", out var xForwardedFor))
-            {
-                ipAddress = xForwardedFor.ToString().Split(',')[0];
-            }
-            else
-            {
-                ipAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
-            }
-        }
+        // Use RemoteIpAddress which is populated by ForwardedHeadersMiddleware if behind a proxy.
+        // We do not manually parse X-Forwarded-For anymore to prevent IP spoofing, as the middleware handles trust.
+        ipAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
 
         // Anonymize the last octet of the IP address.
         if (ipAddress.Contains('.'))

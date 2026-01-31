@@ -32,15 +32,25 @@ public static class SecretReader
     /// <exception cref="KeyNotFoundException">Thrown when the JWT key cannot be found or is invalid.</exception>
     public static string GetJwtKey()
     {
+        string jwtKey;
         if (IsRunningInContainer())
         {
-            return ReadSecretFromFile("/secrets/jwt_key", "JWT key");
+            jwtKey = ReadSecretFromFile("/secrets/jwt_key", "JWT key");
+        }
+        else
+        {
+            var envKey = Environment.GetEnvironmentVariable("JWT_KEY");
+            if (string.IsNullOrEmpty(envKey))
+            {
+                throw new KeyNotFoundException("JWT_KEY environment variable is not set.");
+            }
+
+            jwtKey = envKey;
         }
 
-        var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY");
-        if (string.IsNullOrEmpty(jwtKey))
+        if (jwtKey.Length < 32)
         {
-            throw new KeyNotFoundException("JWT_KEY environment variable is not set.");
+            throw new InvalidOperationException("JWT key must be at least 32 characters long for security reasons.");
         }
 
         return jwtKey;
